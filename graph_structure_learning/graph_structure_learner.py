@@ -80,11 +80,11 @@ class CosineSimilarityModule(nn.Module):
                 adj):
             """
             Parameters
-            :node_features, (num_nodes, input_size)
-            :adjacency_matrix, (num_nodes, num_nodes)
+                :node_features, (num_pers, input_size)
+                :adjacency_matrix, (input_size, input_size)
 
             Returns
-            :attention, (num_nodes, num_nodes)
+                :cosine_similarity_matrix, (input_size, input_size)
             """
             # Ensure the adjacency matrix is a float tensor
             adjacency_matrix = adjacency_matrix.float()
@@ -109,15 +109,30 @@ class CosineSimilarityModule(nn.Module):
 class MatrixRefineModule(nn.Module):
     def __init__(
             self,
-            adj,
             curr_node_features,
+            adj,
+            adj_0,
+            adj_1=None,
+            input_size=1000,
             lam=0,
             eta=0):
         super(MatrixRefineModule, self).__init__()
+        self.lam = lam
+        self.eta = eta
+        self.curr_node_features = curr_node_features
+        self.adj = adj
+        self.adj_0 = adj_0
+        self.adj_1 = adj_1
+        self.cosineSim = CosineSimilarityModule(input_size)
 
     def forward(self):
-        pass
+        combined_refined_adj = None
+        refinedMat = self.cosineSim(self.curr_node_features, self.adj)
+        if adj_1 != None:
+            combined_refined_adj = (self.lam * self.adj_0) + (1 - self.lam) * \
+                (self.eta * refinedMat + (1 - self.eta) * self.adj_1)
 
+        return refinedMat, combined_refined_adj
 
 class InterMolecularGNN(nn.Module):
     def __init__(self):
