@@ -66,7 +66,7 @@ class CosineSimilarityModule(nn.Module):
                 self,
                 input_size,
                 num_pers=16):
-            super(GraphLearner, self).__init__()
+            super(CosineSimilarityModule, self).__init__()
             self.device = device
 
             self.weight_tensor = torch.Tensor(num_pers, input_size)
@@ -113,14 +113,15 @@ class MatrixRefineModule(nn.Module):
             curr_node_features,
             lam=0,
             eta=0):
-        
+        super(MatrixRefineModule, self).__init__()
 
     def forward(self):
         pass
 
 
-class EmbeddingsRefineModule(nn.Module):
+class InterMolecularGNN(nn.Module):
     def __init__(self):
+        super(InterMolecularGNN, self).__init__()
         pass
 
     def forward(self):
@@ -129,6 +130,7 @@ class EmbeddingsRefineModule(nn.Module):
 
 class PredictionModule(nn.Module):
     def __init__(self):
+
         pass
 
     def forward(self):
@@ -162,11 +164,8 @@ class GraphLearner(nn.Module):
         self.T = iters
         self.laplace_weight = laplaceWeight
         self.init_adj_weight = initAdjWeight
-        self.intermolec_gnn = None
 
-        if intermolec_gnn == 'STGNN':
-            self.intermolec_gnn = None  # placeholder
-
+        self.intermolec_gnn = InterMolecularGNN(intermolec_gnn)
         self.refine_matrix = MatrixRefineModule()
         self.refine_embeddings = EmbeddingsRefineModule()
         self.predict = PredictionModule()
