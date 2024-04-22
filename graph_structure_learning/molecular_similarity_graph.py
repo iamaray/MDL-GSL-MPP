@@ -43,10 +43,10 @@ class MolecularSimilarityGraph:
             self.initialAdj, dtype=torch.float)
 
         # Convert node embeddings to PyTorch tensor
-        x = torch.tensor(self.embeddings, dtype=torch.float)
+        # x = torch.tensor(self.embeddings, dtype=torch.float)
 
         # Create a PyTorch Geometric Data object with edge weights
-        self.graphData = Data(x=x, edge_index=edge_index,
+        self.graphData = Data(x=self.embeddings, edge_index=edge_index,
                               edge_attr=edge_weights)
         # data = Data(x=x, edge_index=edge_index)
 

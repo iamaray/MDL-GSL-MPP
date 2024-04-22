@@ -56,53 +56,137 @@ def compute_normalized_laplacian(adj):
     return L_norm
 
 
-class GraphLearner(nn.Module):
+class CosineSimilarityModule(nn.Module):
     """
-        Implements GSL.
+        Performs the weighted cosine computation and the graph update.
     """
 
     def __init__(self):
-        def __init__(self, input_size, hidden_size, topk=None, epsilon=None, num_pers=16, metric_type='weighted_cosine', device=None):
+        def __init__(
+                self,
+                input_size,
+                num_pers=16):
             super(GraphLearner, self).__init__()
             self.device = device
-            self.topk = topk
-            self.epsilon = epsilon
-            self.metric_type = metric_type
 
-            # if metric_type == 'weighted_cosine'
             self.weight_tensor = torch.Tensor(num_pers, input_size)
+
             self.weight_tensor = nn.Parameter(
                 nn.init.xavier_uniform_(self.weight_tensor))
-            print(
-                '[ Multi-perspective {} GraphLearner: {} ]'.format(metric_type, num_pers))
 
-    def forward(self, context, ctx_mask=None):
-        # if metric_type == 'weighted_cosine'
-        expand_weight_tensor = self.weight_tensor.unsqueeze(1)
-        if len(context.shape) == 3:
-            expand_weight_tensor = expand_weight_tensor.unsqueeze(1)
+        def forward(
+                self,
+                node_features,
+                adj):
+            """
+            Parameters
+            :node_features, (num_nodes, input_size)
+            :adjacency_matrix, (num_nodes, num_nodes)
 
-        context_fc = context.unsqueeze(0) * expand_weight_tensor
-        context_norm = F.normalize(context_fc, p=2, dim=-1)
-        attention = torch.matmul(
-            context_norm, context_norm.transpose(-1, -2)).mean(0)
-        markoff_value = 0
+            Returns
+            :attention, (num_nodes, num_nodes)
+            """
+            # Ensure the adjacency matrix is a float tensor
+            adjacency_matrix = adjacency_matrix.float()
 
-        # if ctx_mask is not None:
-        #     attention = attention.masked_fill_(1 - ctx_mask.byte().unsqueeze(1), markoff_value)
-        #     attention = attention.masked_fill_(1 - ctx_mask.byte().unsqueeze(-1), markoff_value)
+            # Compute the weighted node features
+            weighted_node_features = node_features * self.weight_tensor
 
-        if self.epsilon is not None:
-            attention = self.build_epsilon_neighbourhood(
-                attention, self.epsilon, markoff_value)
+            # Normalize the weighted node features
+            weighted_node_features_norm = F.normalize(
+                weighted_node_features, p=2, dim=1)
 
-        # if self.topk is not None:
-        #     attention = self.build_knn_neighbourhood(attention, self.topk, markoff_value)
+            # Compute the cosine similarity matrix
+            cosine_similarity_matrix = torch.matmul(
+                weighted_node_features_norm, weighted_node_features_norm.t())
 
-        return attention
+            # Set the diagonal to zero (self-similarity is not defined)
+            cosine_similarity_matrix.fill_diagonal_(0)
 
-    def build_epsilon_neighbourhood(self, attention, epsilon, markoff_value):
-        mask = (attention > epsilon).detach().float()
-        weighted_adjacency_matrix = attention * \
-            mask + markoff_value * (1 - mask)
-        return weighted_adjacency_matrix
+            return cosine_similarity_matrix
+
+
+class MatrixRefineModule(nn.Module):
+    def __init__(
+            self,
+            adj,
+            curr_node_features,
+            lam=0,
+            eta=0):
+        
+
+    def forward(self):
+        pass
+
+
+class EmbeddingsRefineModule(nn.Module):
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass
+
+
+class PredictionModule(nn.Module):
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass
+
+
+class GraphLearner(nn.Module):
+    def __init__(
+            self,
+            data,
+            iters,
+            laplace_weight=0,
+            initAdj_weight=0,
+            intermolec_gnn='STGNN'
+    ):
+
+        # Assuming `data` is your PyTorch Geometric graph data object
+        edge_index = data.edge_index
+        edge_weights = data.edge_attr
+
+        # Number of nodes in the graph
+        num_nodes = data.num_nodes
+        # Initialize matrix of node embeddings
+        self.init_embedding_matrix = data.x
+        # Initialize an adjacency matrix filled with zeros
+        self.init_adjacency_matrix = torch.zeros((num_nodes, num_nodes))
+        # Fill the adjacency matrix with edge weights
+        for i, (src, tgt) in enumerate(edge_index.t()):
+            self.init_adjacency_matrix[src, tgt] = edge_weights[i]
+
+        self.T = iters
+        self.laplace_weight = laplaceWeight
+        self.init_adj_weight = initAdjWeight
+        self.intermolec_gnn = None
+
+        if intermolec_gnn == 'STGNN':
+            self.intermolec_gnn = None  # placeholder
+
+        self.refine_matrix = MatrixRefineModule()
+        self.refine_embeddings = EmbeddingsRefineModule()
+        self.predict = PredictionModule()
+        self.refined_mats = [(self.epsilonMaskedInitAdj, None)]
+        self.learned_embedding_mats = [self.init_embedding_matrix]
+
+    def forward(self):
+        t = 1
+        while t <= self.T:
+            refined_adj, combined_refined_adj = self.refineMatrix(
+                self.refinedMats[t-1][0], self.learned_embedding_mats[t-1])
+            self.refinedMats += [(refinedAdj, combinedRefinedAdj)]
+
+            curr_embedding_mat = self.learned_embedding_mats[0]
+
+            curr_learned_embedding_mat = self.intermolec_gnn(
+                curr_embedding, combined_refined_adj)
+
+            self.learned_embedding_mats += [curr_learned_embedding_mat]
+
+            t += 1
+
+        return self.predict(self.learned_embedding_mats[T-1])
