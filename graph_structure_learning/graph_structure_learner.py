@@ -64,12 +64,12 @@ class CosineSimilarityModule(nn.Module):
     def __init__(self):
         def __init__(
                 self,
-                input_size,
+                num_nodes,
                 num_pers=16):
             super(CosineSimilarityModule, self).__init__()
             self.device = device
 
-            self.weight_tensor = torch.Tensor(num_pers, input_size)
+            self.weight_tensor = torch.Tensor(num_pers, num_nodes)
 
             self.weight_tensor = nn.Parameter(
                 nn.init.xavier_uniform_(self.weight_tensor))
@@ -134,6 +134,7 @@ class MatrixRefineModule(nn.Module):
 
         return refinedMat, combined_refined_adj
 
+
 class InterMolecularGNN(nn.Module):
     def __init__(self):
         super(InterMolecularGNN, self).__init__()
@@ -144,12 +145,50 @@ class InterMolecularGNN(nn.Module):
 
 
 class PredictionModule(nn.Module):
-    def __init__(self):
+    def __init__(self, input_size, hidden_sizes, output_size, gradient=True):
+        super(PredictionModule, self).__init__()
+        self.gradient = gradient
+        self.layers = nn.ModuleList()
+        # Input layer
+        self.layers.append(nn.Linear(input_size, hidden_sizes[0]))
+        # Hidden layers
+        for i in range(len(hidden_sizes) - 1):
+            self.layers.append(nn.Linear(hidden_sizes[i], hidden_sizes[i + 1]))
+        # Output layer
+        self.layers.append(nn.Linear(hidden_sizes[-1], output_size))
+        self.relu = nn.ReLU()
 
-        pass
+    def forward(self, node_features):
+        x = node_features
+        for layer in self.layers[:-1]:
+            x = self.relu(layer(x))
+        out = self.layers[-1](x)
 
-    def forward(self):
-        pass
+        output = {"output": out}
+
+        if self.gradient and out.requires_grad:
+            # Assuming `node_features` is part of a larger data object that includes `pos` and `displacement`
+            # This part is adapted from the provided model and might need adjustments based on your specific use case
+            volume = torch.einsum("zi,zi->z", node_features[:, 0, :], torch.cross(
+                node_features[:, 1, :], node_features[:, 2, :], dim=1)).unsqueeze(-1)
+            grad = torch.autograd.grad(
+                out,
+                # Assuming `node_features` is the tensor you want to compute gradients for
+                [node_features],
+                grad_outputs=torch.ones_like(out),
+                create_graph=self.training
+            )
+            forces = -1 * grad[0]
+            stress = forces  # Assuming `stress` is equivalent to `forces` in this context
+            stress = stress / volume.view(-1, 1, 1)
+
+            output["node_grad"] = forces
+            output["stress"] = stress
+        else:
+            output["node_grad"] = None
+            output["stress"] = None
+
+        return output
 
 
 class GraphLearner(nn.Module):
@@ -159,9 +198,7 @@ class GraphLearner(nn.Module):
             iters,
             laplace_weight=0,
             initAdj_weight=0,
-            intermolec_gnn='STGNN'
-    ):
-
+            intermolec_gnn='STGNN'):
         # Assuming `data` is your PyTorch Geometric graph data object
         edge_index = data.edge_index
         edge_weights = data.edge_attr
@@ -204,3 +241,22 @@ class GraphLearner(nn.Module):
             t += 1
 
         return self.predict(self.learned_embedding_mats[T-1])
+
+
+"""
+    TRAINING LOOP
+"""
+
+
+def loss_gsl():
+    pass
+
+
+def loss_pred():
+    pass
+
+
+def loss(mu):
+    return (mu * loss_gsl) + ((1 - mu) * loss_pred)
+
+
