@@ -86,6 +86,8 @@ class PropertyTrainer(BaseTrainer):
                 logging.info(
                     f"Running for {end_epoch - start_epoch} epochs on {type(self.model[0]).__name__} model"
                 )
+        outs = []
+        readout_lst = []
 
         for epoch in range(start_epoch, end_epoch):
             epoch_start_time = time.time()
@@ -120,7 +122,7 @@ class PropertyTrainer(BaseTrainer):
                     # Perform a readout operation on the atomic node embeddings
                     # to obtain a representation of the entire molecule.
                     # TODO: We need to extract this vector somehow
-                    readout = torch.exp(torch.mean(torch.log(out), dim=1))
+                    outs += [out]
 
                     loss = self._compute_loss(out_list, batch)
 
@@ -140,6 +142,10 @@ class PropertyTrainer(BaseTrainer):
                         "loss", loss[n].item(), out_list[n]["output"].shape[0], _metrics[n])
 
             self.epoch = epoch + 1
+
+            want = outs[-1]
+            readout_lst = [torch.exp(torch.mean(
+                torch.log(h), dim=1)) for h in want]
 
             if str(self.rank) not in ("cpu", "cuda"):
                 dist.barrier()
@@ -213,7 +219,7 @@ class PropertyTrainer(BaseTrainer):
             if "test" in self.write_output and self.data_loader[0].get("test_loader"):
                 self.predict(self.data_loader[0]["test_loader"], "test")
 
-        return self.best_model_state, readout
+        return self.best_model_state, readout_lst
 
     @torch.no_grad()
     def validate(self, split="val"):
